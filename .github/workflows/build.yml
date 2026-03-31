@@ -2,8 +2,8 @@ name: Build Manager
 
 on:
   push:
-    tags: [ "*" ]
-    branches: [ "main" ]
+    tags: ["*"]
+    branches: ["main"]
     paths:
       - '.github/workflows/build.yml'
       - 'app/**'
@@ -11,21 +11,22 @@ on:
       - 'build.gradle.kts'
       - 'gradle/libs.versions.toml'
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
     paths:
       - '.github/workflows/build.yml'
       - 'app/**'
       - 'apd/**'
       - 'build.gradle.kts'
       - 'gradle/libs.versions.toml'
-  workflow_call:
-  workflow_dispatch:
+  workflow_call: {}
+  workflow_dispatch: {}
 
 jobs:
   build-manager:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,10 +55,13 @@ jobs:
         with:
           packages: 'build-tools;34.0.0'
 
+      - name: Add build-tools to PATH
+        run: echo "$ANDROID_HOME/build-tools/34.0.0:$PATH" >> $GITHUB_ENV
+
       - name: Set build tools version
         run: echo "BUILD_TOOL_VERSION=34.0.0" >> $GITHUB_ENV
 
-      - name: Install toolchain
+      - name: Install Rust toolchain
         run: |
           rustup default stable
           rustup update stable
@@ -85,13 +89,13 @@ jobs:
           AUTO_KEYSTORE=$RUNNER_TEMP/auto-release-key.jks
           keytool -genkeypair \
             -keystore "$AUTO_KEYSTORE" \
-            -alias      release-key \
-            -keyalg     RSA \
-            -keysize    2048 \
-            -validity   10000 \
-            -storepass  release1234 \
-            -keypass    release1234 \
-            -dname      "CN=Release Build, OU=CI, O=GitHub Actions, L=Unknown, ST=Unknown, C=US"
+            -alias release-key \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass release1234 \
+            -keypass release1234 \
+            -dname "CN=Release Build, OU=CI, O=GitHub Actions, L=Unknown, ST=Unknown, C=US"
           echo "AUTO_KEYSTORE=$AUTO_KEYSTORE" >> $GITHUB_OUTPUT
           B64=$(base64 -w 0 "$AUTO_KEYSTORE")
           echo "AUTO_KEY_B64=$B64" >> $GITHUB_OUTPUT
@@ -106,7 +110,6 @@ jobs:
           keyStorePassword: ${{ secrets.SIGNING_KEY != '' && secrets.KEY_STORE_PASSWORD || 'release1234' }}
           keyPassword: ${{ secrets.SIGNING_KEY != '' && secrets.KEY_PASSWORD || 'release1234' }}
           zipAlign: true
-          buildToolsVersion: "34.0.0"
 
       - name: Sign Debug APK
         uses: kevin-david/zipalign-sign-android-release@v2
@@ -118,7 +121,6 @@ jobs:
           keyStorePassword: ${{ secrets.SIGNING_KEY != '' && secrets.KEY_STORE_PASSWORD || 'release1234' }}
           keyPassword: ${{ secrets.SIGNING_KEY != '' && secrets.KEY_PASSWORD || 'release1234' }}
           zipAlign: true
-          buildToolsVersion: "34.0.0"
 
       - name: Upload Release artifact
         uses: actions/upload-artifact@v4
