@@ -2,8 +2,8 @@ name: Build Manager
 
 on:
   push:
-    tags: ["*"]
-    branches: ["main"]
+    tags: [ "*" ]
+    branches: [ "main" ]
     paths:
       - '.github/workflows/build.yml'
       - 'app/**'
@@ -11,15 +11,15 @@ on:
       - 'build.gradle.kts'
       - 'gradle/libs.versions.toml'
   pull_request:
-    branches: ["main"]
+    branches: [ "main" ]
     paths:
       - '.github/workflows/build.yml'
       - 'app/**'
       - 'apd/**'
       - 'build.gradle.kts'
       - 'gradle/libs.versions.toml'
-  workflow_call: {}
-  workflow_dispatch: {}
+  workflow_call:
+  workflow_dispatch:
 
 jobs:
   build-manager:
@@ -37,7 +37,7 @@ jobs:
         id: parse_version
         run: |
           COMMIT_NUM=$(git rev-list --count HEAD)
-          VERSION=$(echo "$COMMIT_NUM + 200 + 10000" | bc)
+          VERSION=$((COMMIT_NUM + 10200))
           echo "Generated Version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
@@ -55,11 +55,8 @@ jobs:
         with:
           packages: 'build-tools;34.0.0'
 
-      - name: Add build-tools to PATH
-        run: echo "$ANDROID_HOME/build-tools/34.0.0:$PATH" >> $GITHUB_ENV
-
-      - name: Set build tools version
-        run: echo "BUILD_TOOL_VERSION=34.0.0" >> $GITHUB_ENV
+      - name: Set build tools version for signing action
+        run: echo "BUILD_TOOLS_VERSION=34.0.0" >> $GITHUB_ENV
 
       - name: Install Rust toolchain
         run: |
@@ -80,9 +77,10 @@ jobs:
           echo 'org.gradle.vfs.watch=true' >> gradle.properties
           echo 'org.gradle.jvmargs=-Xmx2048m' >> gradle.properties
           echo 'android.native.buildOutput=verbose' >> gradle.properties
-          sed -i 's/org.gradle.configuration-cache=true//g' gradle.properties
-          ./gradlew clean assembleDebug assembleRelease
+          sed -i 's/org.gradle.configuration-cache=true//g' gradle.properties || true
+          ./gradlew clean assembleDebug assembleRelease --no-daemon
 
+      # Always generate auto keystore (fallback when no real signing secrets are set)
       - name: Generate auto keystore
         id: auto_keystore
         run: |
@@ -105,10 +103,10 @@ jobs:
         id: sign_app
         with:
           releaseDirectory: app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.SIGNING_KEY != '' && secrets.SIGNING_KEY || steps.auto_keystore.outputs.AUTO_KEY_B64 }}
-          alias: ${{ secrets.SIGNING_KEY != '' && secrets.ALIAS || 'release-key' }}
-          keyStorePassword: ${{ secrets.SIGNING_KEY != '' && secrets.KEY_STORE_PASSWORD || 'release1234' }}
-          keyPassword: ${{ secrets.SIGNING_KEY != '' && secrets.KEY_PASSWORD || 'release1234' }}
+          signingKeyBase64: ${{ secrets.SIGNING_KEY || steps.auto_keystore.outputs.AUTO_KEY_B64 }}
+          alias: ${{ secrets.ALIAS || 'release-key' }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD || 'release1234' }}
+          keyPassword: ${{ secrets.KEY_PASSWORD || 'release1234' }}
           zipAlign: true
 
       - name: Sign Debug APK
@@ -116,10 +114,10 @@ jobs:
         id: sign_debug_app
         with:
           releaseDirectory: app/build/outputs/apk/debug
-          signingKeyBase64: ${{ secrets.SIGNING_KEY != '' && secrets.SIGNING_KEY || steps.auto_keystore.outputs.AUTO_KEY_B64 }}
-          alias: ${{ secrets.SIGNING_KEY != '' && secrets.ALIAS || 'release-key' }}
-          keyStorePassword: ${{ secrets.SIGNING_KEY != '' && secrets.KEY_STORE_PASSWORD || 'release1234' }}
-          keyPassword: ${{ secrets.SIGNING_KEY != '' && secrets.KEY_PASSWORD || 'release1234' }}
+          signingKeyBase64: ${{ secrets.SIGNING_KEY || steps.auto_keystore.outputs.AUTO_KEY_B64 }}
+          alias: ${{ secrets.ALIAS || 'release-key' }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD || 'release1234' }}
+          keyPassword: ${{ secrets.KEY_PASSWORD || 'release1234' }}
           zipAlign: true
 
       - name: Upload Release artifact
@@ -134,13 +132,10 @@ jobs:
           name: APatch-Debug
           path: ${{ steps.sign_debug_app.outputs.signedReleaseFile }}
 
-      - name: Post to channel
+      - name: Post to Telegram channel
         if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.ref_type != 'tag' }}
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-          COMMIT_URL: ${{ github.event.head_commit.url }}
-          COMMIT_ID: ${{ github.event.head_commit.id }}
         run: |
           if [ -n "${BOT_TOKEN}" ]; then
             CHANNELS=(-1002058433411 -1001910818234)
@@ -154,7 +149,7 @@ jobs:
             done
           fi
 
-      - name: Release APK
+      - name: Create GitHub Release
         if: github.ref_type == 'tag'
         uses: ncipollo/release-action@v1
         with:
