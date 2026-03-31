@@ -1,12 +1,10 @@
-use anyhow::Result;
-use clap::Parser;
-
+use crate::{defs, event, lua, module, supercall, utils};
 #[cfg(target_os = "android")]
 use android_logger::Config;
+use anyhow::Result;
+use clap::Parser;
 #[cfg(target_os = "android")]
 use log::LevelFilter;
-
-use crate::{defs, event, module, supercall, utils};
 
 /// APatch cli
 #[derive(Parser, Debug)]
@@ -43,11 +41,12 @@ enum Commands {
     /// Start uid listener for synchronizing root list
     UidListener,
 
-    /// SELinux policy Patch tool
-    Sepolicy {
-        #[command(subcommand)]
-        command: Sepolicy,
-    },
+    /// Resetprop - Magisk-compatible system property tool
+    Resetprop(crate::resetprop::Args),
+
+    /// MagiskPolicy - SELinux Policy Patch Tool
+    Sepolicy(crate::sepolicy::Args),
+
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -123,6 +122,14 @@ pub fn run() -> Result<()> {
     if arg0.ends_with("kp") || arg0.ends_with("su") {
         return crate::apd::root_shell();
     }
+    if arg0.ends_with("resetprop") {
+        let all_args: Vec<String> = std::env::args().collect();
+        crate::resetprop::resetprop_main(&all_args)
+    }
+    if arg0.ends_with("magiskpolicy") {
+        let all_args: Vec<String> = std::env::args().collect();
+        crate::sepolicy::policy_main(&all_args)
+    }
 
     let cli = Args::parse();
 
@@ -149,7 +156,7 @@ pub fn run() -> Result<()> {
                 Module::Uninstall { id } => module::uninstall_module(&id),
                 Module::Action { id } => module::run_action(&id),
                 Module::Lua { id, function } => {
-                    module::run_lua(&id, &function, false, true).map_err(|e| anyhow::anyhow!("{}", e))
+                    lua::run_lua(&id, &function, false, true).map_err(|e| anyhow::anyhow!("{}", e))
                 }
                 Module::Enable { id } => module::enable_module(&id),
                 Module::Disable { id } => module::disable_module(&id),
@@ -157,11 +164,19 @@ pub fn run() -> Result<()> {
             }
         }
 
-        Commands::Sepolicy { command } => match command {
-            Sepolicy::Check { sepolicy } => crate::sepolicy::check_rule(&sepolicy),
-        },
-
         Commands::Services => event::on_services(cli.superkey),
+
+        Commands::Resetprop(resetprop_args) => crate::resetprop::execute(&resetprop_args)
+            .inspect_err(|e| {
+                if e.downcast_ref::<crate::resetprop::WaitTimeoutError>()
+                    .is_some()
+                {
+                    std::process::exit(2);
+                }
+        }),
+
+        Commands::Sepolicy(sepolicy_args) => crate::sepolicy::execute(&sepolicy_args),
+
     };
 
     if let Err(e) = &result {
