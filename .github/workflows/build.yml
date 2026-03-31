@@ -52,7 +52,10 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: ''
+          packages: 'build-tools;34.0.0'
+
+      - name: Set build tools version
+        run: echo "BUILD_TOOL_VERSION=34.0.0" >> $GITHUB_ENV
 
       - name: Install toolchain
         run: |
@@ -103,6 +106,7 @@ jobs:
           keyStorePassword: ${{ secrets.SIGNING_KEY != '' && secrets.KEY_STORE_PASSWORD || 'release1234' }}
           keyPassword: ${{ secrets.SIGNING_KEY != '' && secrets.KEY_PASSWORD || 'release1234' }}
           zipAlign: true
+          buildToolsVersion: "34.0.0"
 
       - name: Sign Debug APK
         uses: kevin-david/zipalign-sign-android-release@v2
@@ -114,6 +118,7 @@ jobs:
           keyStorePassword: ${{ secrets.SIGNING_KEY != '' && secrets.KEY_STORE_PASSWORD || 'release1234' }}
           keyPassword: ${{ secrets.SIGNING_KEY != '' && secrets.KEY_PASSWORD || 'release1234' }}
           zipAlign: true
+          buildToolsVersion: "34.0.0"
 
       - name: Upload Release artifact
         uses: actions/upload-artifact@v4
