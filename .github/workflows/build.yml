@@ -75,7 +75,6 @@ jobs:
           echo 'android.native.buildOutput=verbose' >> gradle.properties
           sed -i 's/org.gradle.configuration-cache=true//g' gradle.properties
           ./gradlew clean assembleDebug assembleRelease
-          echo "BUILD_TOOL_VERSION=$(ls /usr/local/lib/android/sdk/build-tools/ | tail -n 1)" >> $GITHUB_ENV
 
       - name: Sign Release
         env:
@@ -112,8 +111,8 @@ jobs:
       - name: Upload mappings
         uses: actions/upload-artifact@v6
         with:
-          name: "mappings"
-          path: "app/build/outputs/mapping/release/"
+          name: APatch-Release
+          path: app/build/outputs/apk/release/*.apk
 
       - name: Upload build artifact1
         env:
@@ -156,16 +155,13 @@ jobs:
             done
           fi
 
-      - name: Release apk
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        if: ${{ env.SIGNING_KEY != '' && github.ref_type == 'tag' }}
-        continue-on-error: true
+      - name: Release APK
+        if: github.ref_type == 'tag'
         uses: ncipollo/release-action@v1
         with:
           token: ${{ github.token }}
           tag: ${{ steps.parse_version.outputs.VERSION }}
-          artifacts: ${{steps.sign_app.outputs.signedReleaseFile}}
+          artifacts: app/build/outputs/apk/release/*.apk
           generateReleaseNotes: true
           makeLatest: true
           replacesArtifacts: true
